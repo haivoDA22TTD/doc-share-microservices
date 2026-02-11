@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="login.title">Login - DocShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/js/i18n.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-blue-600" data-i18n="dashboard.title">DocShare</h1>
+            <button id="lang-toggle" onclick="toggleLanguage()" class="text-sm text-gray-700 hover:text-blue-600 font-semibold px-3 py-1 rounded border border-gray-300 hover:border-blue-500">
+                🇬🇧 EN
+            </button>
+        </div>
+        <h2 class="text-xl font-semibold text-center mb-6" data-i18n="login.title">Login</h2>
+        
+        <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+        
+        <form id="login-form">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="username" data-i18n="login.username">
+                    Username
+                </label>
+                <input 
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                    id="username" 
+                    type="text" 
+                    data-i18n="login.enterUsername"
+                    placeholder="Enter username"
+                    required>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="password" data-i18n="login.password">
+                    Password
+                </label>
+                <input 
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                    id="password" 
+                    type="password" 
+                    data-i18n="login.enterPassword"
+                    placeholder="Enter password"
+                    required>
+            </div>
+            
+            <button 
+                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full" 
+                type="submit"
+                data-i18n="login.button">
+                Login
+            </button>
+        </form>
+        
+        <p class="text-center text-gray-600 text-sm mt-4">
+            <span data-i18n="login.noAccount">Don't have an account?</span>
+            <a href="/register" class="text-blue-500 hover:text-blue-700 font-semibold" data-i18n="login.register">Register</a>
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error-message');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify({
+                        id: data.userId,
+                        username: data.username,
+                        email: data.email,
+                        roles: data.roles
+                    }));
+                    window.location.href = '/dashboard';
+                } else {
+                    errorDiv.textContent = data.error || t('login.failed');
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorDiv.textContent = t('login.error');
+                errorDiv.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

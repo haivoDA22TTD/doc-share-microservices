@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DocShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/js/i18n.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-blue-600">DocShare</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="lang-toggle" onclick="toggleLanguage()" class="text-gray-700 hover:text-blue-600 font-semibold px-3 py-2 rounded border border-gray-300 hover:border-blue-500">
+                        🇬🇧 EN
+                    </button>
+                    <span id="user-info" class="text-gray-700"></span>
+                    <button id="logout-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" data-i18n="nav.logout">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold mb-4" data-i18n="dashboard.welcome">Welcome to DocShare!</h2>
+            <p class="text-gray-600 mb-4" data-i18n="dashboard.subtitle">Your collaborative document editing platform.</p>
+            
+            <div id="user-details" class="bg-gray-50 p-4 rounded">
+                <h3 class="font-semibold mb-2" data-i18n="dashboard.userInfo">User Information:</h3>
+                <div id="user-data" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-bold mb-4" data-i18n="dashboard.quickActions">Quick Actions</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <a href="/documents/new" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded text-center" data-i18n="dashboard.createNew">
+                    Create New Document
+                </a>
+                <a href="/documents" class="bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-4 rounded text-center" data-i18n="dashboard.myDocs">
+                    My Documents
+                </a>
+                <a href="/documents" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded text-center" data-i18n="dashboard.sharedWithMe">
+                    Shared With Me
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        document.getElementById('user-info').textContent = `${t('nav.hello')}, ${user.username}`;
+
+        async function loadUserDetails() {
+            try {
+                const response = await fetch('/api/users/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    const userDataDiv = document.getElementById('user-data');
+                    userDataDiv.innerHTML = `
+                        <p><strong>${t('dashboard.username')}:</strong> ${userData.username}</p>
+                        <p><strong>${t('dashboard.email')}:</strong> ${userData.email}</p>
+                        <p><strong>${t('dashboard.fullName')}:</strong> ${userData.fullName}</p>
+                        <p><strong>${t('dashboard.roles')}:</strong> ${userData.roles.join(', ')}</p>
+                        <p><strong>${t('dashboard.accountCreated')}:</strong> ${new Date(userData.createdAt).toLocaleDateString()}</p>
+                    `;
+                } else if (response.status === 401) {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error loading user details:', error);
+            }
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Call logout API to blacklist token
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } catch (error) {
+                    console.error('Logout API error:', error);
+                }
+            }
+            localStorage.clear();
+            window.location.href = '/login';
+        });
+
+        loadUserDetails();
+    </script>
+</body>
+</html>

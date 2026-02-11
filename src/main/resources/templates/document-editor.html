@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Editor - DocShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Quill Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    
+    <!-- WebSocket -->
+    <script src="/webjars/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="/webjars/stomp-websocket/2.3.4/stomp.min.js"></script>
+    
+    <!-- i18n must be loaded before collaboration -->
+    <script src="/js/i18n.js"></script>
+    <script src="/js/collaboration.js"></script>
+    <style>
+        #editor-container {
+            height: 500px;
+        }
+        .ql-editor {
+            font-size: 16px;
+            line-height: 1.6;
+            position: relative;
+        }
+        .ql-toolbar {
+            background-color: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+        .ql-container {
+            border-radius: 0 0 8px 8px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* Remote cursor styles */
+        .remote-cursor {
+            position: absolute !important;
+            pointer-events: auto !important;
+            z-index: 9999 !important;
+            cursor: pointer !important;
+            display: block !important;
+            visibility: visible !important;
+        }
+        
+        .cursor-caret {
+            width: 3px !important;
+            height: 22px !important;
+            position: relative !important;
+            animation: blink 1s infinite !important;
+        }
+        
+        .cursor-flag {
+            pointer-events: none !important;
+            z-index: 10000 !important;
+        }
+        
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0.5; }
+        }
+        
+        /* Ensure editor has relative positioning for absolute children */
+        .ql-editor {
+            position: relative !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-6">
+                    <h1 class="text-2xl font-bold text-blue-600">DocShare</h1>
+                    <a href="/dashboard" class="text-gray-600 hover:text-blue-600" data-i18n="nav.dashboard">Dashboard</a>
+                    <a href="/documents" class="text-gray-600 hover:text-blue-600" data-i18n="nav.documents">Documents</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="active-users" class="flex items-center space-x-2"></div>
+                    <span id="save-status" class="text-sm text-gray-500"></span>
+                    <button id="lang-toggle" onclick="toggleLanguage()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded">
+                        🇬🇧 EN
+                    </button>
+                    <button id="save-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" data-i18n="editor.save">
+                        Save
+                    </button>
+                    <button id="logout-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" data-i18n="nav.logout">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-md p-8">
+            <input 
+                id="doc-title" 
+                type="text" 
+                placeholder="Untitled Document" 
+                data-i18n="editor.untitled"
+                class="text-3xl font-bold w-full mb-6 border-none focus:outline-none focus:ring-0"
+            />
+            
+            <!-- Quill Editor -->
+            <div id="editor-container"></div>
+            
+            <div class="mt-6 flex items-center justify-between">
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" id="is-public" class="rounded">
+                    <span class="text-sm text-gray-700" data-i18n="editor.makePublic">Make this document public</span>
+                </label>
+                <div class="text-sm text-gray-500">
+                    <span id="word-count">0 <span data-i18n="editor.words">words</span></span> | <span id="char-count">0 <span data-i18n="editor.characters">characters</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Get user info from token
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        const tokenData = parseJwt(token);
+        const user = {
+            id: tokenData?.sub || 0,
+            username: tokenData?.username || 'Anonymous'
+        };
+
+        const pathParts = window.location.pathname.split('/');
+        const documentId = pathParts[pathParts.length - 1] !== 'new' ? pathParts[pathParts.length - 1] : null;
+        
+        const titleInput = document.getElementById('doc-title');
+        const isPublicCheckbox = document.getElementById('is-public');
+        const saveBtn = document.getElementById('save-btn');
+        const saveStatus = document.getElementById('save-status');
+        
+        // Initialize collaboration manager
+        let collaborationManager = null;
+
+        // Initialize Quill Editor with full toolbar
+        window.quill = new Quill('#editor-container', {
+            theme: 'snow',
+            placeholder: t('editor.startTyping'),
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                    [{ 'font': [] }],
+                    [{ 'size': ['small', false, 'large', 'huge'] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'script': 'sub'}, { 'script': 'super' }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'indent': '-1'}, { 'indent': '+1' }],
+                    [{ 'align': [] }],
+                    ['blockquote', 'code-block'],
+                    ['link', 'image', 'video'],
+                    ['clean']
+                ]
+            }
+        });
+
+        // Word and character count
+        function updateWordCount() {
+            const text = quill.getText().trim();
+            const words = text ? text.split(/\s+/).length : 0;
+            const chars = text.length;
+            document.getElementById('word-count').innerHTML = `${words} <span data-i18n="editor.words">${t('editor.words')}</span>`;
+            document.getElementById('char-count').innerHTML = `${chars} <span data-i18n="editor.characters">${t('editor.characters')}</span>`;
+        }
+
+        // Track text changes
+        let isRemoteChange = false;
+        quill.on('text-change', (delta, oldDelta, source) => {
+            updateWordCount();
+            
+            // Send changes to other users via WebSocket
+            if (source === 'user' && collaborationManager && !isRemoteChange) {
+                collaborationManager.sendChange(delta);
+            }
+        });
+        
+        // Track cursor/selection changes
+        quill.on('selection-change', (range, oldRange, source) => {
+            console.log('Selection changed:', range, source);
+            if (range && collaborationManager) {
+                console.log('Sending cursor position:', range.index, range.length);
+                collaborationManager.sendCursor(range.index, range.length);
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            if (collaborationManager) {
+                collaborationManager.disconnect();
+            }
+            
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Call logout API to blacklist token
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } catch (error) {
+                    console.error('Logout API error:', error);
+                }
+            }
+            localStorage.clear();
+            window.location.href = '/login';
+        });
+        
+        // Disconnect on page unload
+        window.addEventListener('beforeunload', () => {
+            if (collaborationManager) {
+                collaborationManager.disconnect();
+            }
+        });
+
+        async function loadDocument() {
+            if (!documentId) return;
+
+            try {
+                const response = await fetch(`/api/documents/${documentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const doc = await response.json();
+                    titleInput.value = doc.title;
+                    
+                    // Load content as HTML or Delta format
+                    if (doc.content) {
+                        try {
+                            // Try to parse as Delta (Quill's native format)
+                            const delta = JSON.parse(doc.content);
+                            quill.setContents(delta);
+                        } catch (e) {
+                            // If not Delta, treat as HTML
+                            quill.root.innerHTML = doc.content;
+                        }
+                    }
+                    
+                    isPublicCheckbox.checked = doc.isPublic;
+                    updateWordCount();
+                    
+                    // Initialize WebSocket collaboration for this document
+                    if (documentId && user.id) {
+                        collaborationManager = new CollaborationManager(
+                            parseInt(documentId),
+                            user.id,
+                            user.username
+                        );
+                        collaborationManager.connect();
+                    }
+                    
+                    if (doc.userPermission === 'VIEW') {
+                        titleInput.disabled = true;
+                        quill.disable();
+                        isPublicCheckbox.disabled = true;
+                        saveBtn.disabled = true;
+                        saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                        saveStatus.textContent = t('editor.readOnly');
+                    }
+                } else if (response.status === 401) {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error loading document:', error);
+            }
+        }
+
+        async function saveDocument() {
+            const title = titleInput.value.trim() || t('editor.untitled');
+            // Save as HTML for better compatibility
+            const content = quill.root.innerHTML;
+            const isPublic = isPublicCheckbox.checked;
+
+            saveStatus.textContent = t('editor.saving');
+            saveBtn.disabled = true;
+
+            try {
+                let response;
+                if (documentId) {
+                    response = await fetch(`/api/documents/${documentId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ title, content, isPublic })
+                    });
+                } else {
+                    response = await fetch('/api/documents', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ title, content, isPublic })
+                    });
+                }
+
+                if (response.ok) {
+                    const doc = await response.json();
+                    saveStatus.textContent = t('editor.saved');
+                    setTimeout(() => saveStatus.textContent = '', 2000);
+                    
+                    if (!documentId) {
+                        window.location.href = `/documents/${doc.id}`;
+                    }
+                } else {
+                    saveStatus.textContent = t('editor.saveFailed');
+                }
+            } catch (error) {
+                console.error('Error saving document:', error);
+                saveStatus.textContent = t('editor.saveFailed');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        saveBtn.addEventListener('click', saveDocument);
+
+        // Auto-save every 30 seconds
+        let autoSaveInterval;
+        if (documentId) {
+            autoSaveInterval = setInterval(() => {
+                if (titleInput.value.trim() || quill.getText().trim()) {
+                    saveDocument();
+                }
+            }, 30000);
+        }
+
+        // Keyboard shortcut Ctrl+S
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveDocument();
+            }
+        });
+
+        loadDocument();
+        
+        // DEBUG: Test cursor manually
+        window.testCursor = function(index = 0) {
+            if (collaborationManager) {
+                console.log('🧪 Testing cursor at index', index);
+                collaborationManager.showRemoteCursor({
+                    userId: 9999,
+                    username: 'Test User',
+                    index: index,
+                    length: 0,
+                    color: '#FF0000'
+                });
+                
+                // Log all cursor elements
+                setTimeout(() => {
+                    const cursors = document.querySelectorAll('.remote-cursor');
+                    console.log('📊 Total cursor elements:', cursors.length);
+                    cursors.forEach((cursor, i) => {
+                        console.log(`Cursor ${i}:`, {
+                            id: cursor.id,
+                            display: cursor.style.display,
+                            visibility: cursor.style.visibility,
+                            left: cursor.style.left,
+                            top: cursor.style.top,
+                            zIndex: cursor.style.zIndex,
+                            position: cursor.style.position
+                        });
+                    });
+                }, 100);
+            } else {
+                console.error('❌ CollaborationManager not initialized');
+            }
+        };
+        
+        window.debugQuill = function() {
+            console.log('🔍 Quill Debug Info:');
+            console.log('- Quill exists:', !!window.quill);
+            console.log('- Editor element:', document.querySelector('.ql-editor'));
+            console.log('- Editor bounds:', document.querySelector('.ql-editor')?.getBoundingClientRect());
+            console.log('- Current selection:', window.quill?.getSelection());
+            console.log('- Text length:', window.quill?.getLength());
+            console.log('- Bounds at 0:', window.quill?.getBounds(0));
+            console.log('- Bounds at 5:', window.quill?.getBounds(5));
+        };
+        
+        console.log('💡 Debug commands:');
+        console.log('  - testCursor(index) - Test cursor at specific index');
+        console.log('  - debugQuill() - Show Quill debug info');
+        console.log('  - collaborationManager - Access collaboration manager');
+    </script>
+</body>
+</html>

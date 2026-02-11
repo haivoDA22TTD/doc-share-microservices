@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share Document - DocShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-6">
+                    <h1 class="text-2xl font-bold text-blue-600">DocShare</h1>
+                    <a href="/dashboard" class="text-gray-600 hover:text-blue-600">Dashboard</a>
+                    <a href="/documents" class="text-gray-600 hover:text-blue-600">Documents</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="logout-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-md p-8">
+            <h2 class="text-2xl font-bold mb-6">Share Document</h2>
+            
+            <div id="doc-info" class="mb-6 p-4 bg-gray-50 rounded"></div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-4">Add People</h3>
+                <div class="flex space-x-2">
+                    <input 
+                        id="share-username" 
+                        type="text" 
+                        placeholder="Enter username"
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select id="share-permission" class="px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="VIEW">View</option>
+                        <option value="EDIT">Edit</option>
+                    </select>
+                    <button id="share-btn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">
+                        Share
+                    </button>
+                </div>
+                <div id="share-error" class="hidden mt-2 text-red-600 text-sm"></div>
+            </div>
+
+            <div>
+                <h3 class="text-lg font-semibold mb-4">People with access</h3>
+                <div id="permissions-list" class="space-y-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        const documentId = window.location.pathname.split('/')[2];
+        
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Call logout API to blacklist token
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } catch (error) {
+                    console.error('Logout API error:', error);
+                }
+            }
+            localStorage.clear();
+            window.location.href = '/login';
+        });
+
+        async function loadDocument() {
+            try {
+                const response = await fetch(`/api/documents/${documentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const doc = await response.json();
+                    document.getElementById('doc-info').innerHTML = `
+                        <h3 class="font-semibold text-lg">${doc.title}</h3>
+                        <p class="text-sm text-gray-600">Owner: ${doc.ownerUsername}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading document:', error);
+            }
+        }
+
+        async function loadPermissions() {
+            try {
+                const response = await fetch(`/api/documents/${documentId}/permissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const permissions = await response.json();
+                    displayPermissions(permissions);
+                }
+            } catch (error) {
+                console.error('Error loading permissions:', error);
+            }
+        }
+
+        function displayPermissions(permissions) {
+            const container = document.getElementById('permissions-list');
+            
+            if (permissions.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No one else has access yet</p>';
+                return;
+            }
+
+            container.innerHTML = permissions.map(perm => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <div>
+                        <p class="font-semibold">${perm.username}</p>
+                        <p class="text-sm text-gray-600">${perm.email}</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm px-3 py-1 bg-blue-100 text-blue-800 rounded">${perm.permission}</span>
+                        <button onclick="revokePermission(${perm.userId})" class="text-red-600 hover:text-red-800 px-3 py-1 border border-red-600 rounded text-sm">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function shareDocument() {
+            const username = document.getElementById('share-username').value.trim();
+            const permission = document.getElementById('share-permission').value;
+            const errorDiv = document.getElementById('share-error');
+
+            if (!username) {
+                errorDiv.textContent = 'Please enter a username';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/documents/${documentId}/share`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, permission })
+                });
+
+                if (response.ok) {
+                    document.getElementById('share-username').value = '';
+                    errorDiv.classList.add('hidden');
+                    loadPermissions();
+                } else {
+                    const error = await response.json();
+                    errorDiv.textContent = error.error || 'Failed to share document';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error sharing document:', error);
+                errorDiv.textContent = 'An error occurred';
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        async function revokePermission(userId) {
+            if (!confirm('Remove access for this user?')) return;
+
+            try {
+                const response = await fetch(`/api/documents/${documentId}/permissions/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    loadPermissions();
+                }
+            } catch (error) {
+                console.error('Error revoking permission:', error);
+            }
+        }
+
+        document.getElementById('share-btn').addEventListener('click', shareDocument);
+        document.getElementById('share-username').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') shareDocument();
+        });
+
+        loadDocument();
+        loadPermissions();
+    </script>
+</body>
+</html>
