@@ -1,4 +1,4 @@
-# 📝 DocShare - Hệ thống Soạn thảo Tài liệu Cộng tác Thời gian Thực
+# 📝 DocShare - Ứng dụng Soạn thảo Tài liệu Cộng tác Thời gian Thực
 
 <div align="center">
 
