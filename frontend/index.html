@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DocShare - Collaborative Document Editor</title>
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Quill Editor CDN - Version 1.3.6 (same as monolithic) -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    
+    <style>
+      #editor-container {
+        height: 500px;
+      }
+      .ql-editor {
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .ql-toolbar {
+        background-color: #f8f9fa;
+        border-radius: 8px 8px 0 0;
+      }
+      .ql-container {
+        border-radius: 0 0 8px 8px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

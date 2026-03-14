@@ -1,0 +1,195 @@
+// Document Editor - QUAN TRỌNG
+.quill-editor-wrapper {
+  margin-bottom: 1.5rem;
+
+  #editor-container {
+    min-height: 500px;
+  }
+
+  // Quill Toolbar
+  .ql-toolbar {
+    background-color: #f8f9fa !important;
+    border: 1px solid $border-color !important;
+    border-radius: 8px 8px 0 0 !important;
+    padding: 8px !important;
+  }
+
+  // Quill Container
+  .ql-container {
+    border: 1px solid $border-color !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+    font-family: $font-family !important;
+    min-height: 450px;
+  }
+
+  // Quill Editor
+  .ql-editor {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+    min-height: 450px !important;
+    padding: 15px !important;
+    color: $text-color !important;
+
+    &.ql-blank::before {
+      color: $text-secondary !important;
+      font-style: normal !important;
+      left: 15px !important;
+    }
+  }
+
+  // Disabled state
+  &.ql-disabled {
+    .ql-toolbar {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .ql-editor {
+      cursor: not-allowed;
+      background-color: #f9fafb;
+    }
+  }
+}
+
+// Document Editor Page
+.document-editor-page {
+  min-height: 100vh;
+  background-color: $bg-color;
+}
+
+.editor-nav {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+  .nav-container {
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 0 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 4rem;
+  }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .nav-logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: $primary-color;
+  }
+
+  .nav-link {
+    color: $text-secondary;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+
+    &:hover {
+      color: $primary-color;
+    }
+  }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    .save-status {
+      font-size: 0.875rem;
+      color: $text-secondary;
+    }
+
+    .language-toggle {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid $border-color;
+      border-radius: 0.375rem;
+      background: white;
+      color: $text-secondary;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+
+      &:hover {
+        color: $primary-color;
+        border-color: $primary-color;
+      }
+    }
+  }
+}
+
+.editor-container {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  position: relative;
+
+  .editor-title {
+    width: 100%;
+    font-size: 1.875rem;
+    font-weight: 700;
+    border: none;
+    outline: none;
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+    color: $text-color;
+
+    &::placeholder {
+      color: $text-secondary;
+    }
+
+    &:disabled {
+      background: transparent;
+      cursor: not-allowed;
+    }
+  }
+
+  .editor-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid $border-color;
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: $text-color;
+      cursor: pointer;
+
+      input[type="checkbox"] {
+        cursor: pointer;
+
+        &:disabled {
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .word-count {
+      font-size: 0.875rem;
+      color: $text-secondary;
+    }
+  }
+
+  .read-only-notice {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: $warning-color;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+}
