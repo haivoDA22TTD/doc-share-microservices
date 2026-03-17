@@ -42,7 +42,6 @@
 ### 🌐 Đa ngôn ngữ
 - ✅ Hỗ trợ đa ngôn ngữ (Tiếng Anh/Tiếng Việt)
 - ✅ Chuyển đổi ngôn ngữ động
-- ✅ Các thành phần UI được bản địa hóa
 
 ### 📊 Giám sát & Quan sát
 - ✅ Thu thập metrics với Prometheus
